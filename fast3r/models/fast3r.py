@@ -55,16 +55,19 @@ class Fast3R(nn.Module,
         freeze="none",
     ):
         super(Fast3R, self).__init__()
-
+        # 通过encoder_args来构建encoder.
         self.encoder_args = OmegaConf.to_container(encoder_args) if isinstance(encoder_args, DictConfig) else encoder_args
         self.build_encoder(encoder_args)
 
+        # 通过decoder_args来构建decoder.
         self.decoder_args = OmegaConf.to_container(decoder_args) if isinstance(decoder_args, DictConfig) else decoder_args
         self.build_decoder(decoder_args)
 
+        # 通过head_args来构建head.
         self.head_args = OmegaConf.to_container(head_args) if isinstance(head_args, DictConfig) else head_args
         self.build_head(head_args)
 
+        # 设置最大并行视图数，用于避免OOM.
         self.max_parallel_views_for_head = 25  # how many views to process in parallel in the head, used to avoid OOM
 
         self.set_freeze(freeze)
@@ -106,12 +109,12 @@ class Fast3R(nn.Module,
         self.depth_mode = head_args['depth_mode']
         self.conf_mode = head_args['conf_mode']
 
-        # allocate primary downstream head
+        # 构建下游任务头, 这里主要构建的是PixelwiseTaskWithDPT模块.
         self.downstream_head = self.head_factory(
             head_args['head_type'], head_args['output_mode'], has_conf=bool(head_args['conf_mode']), patch_size=head_args['patch_size']
         )
 
-        # add the second head if with_local_head is True
+        # 如果with_local_head为True，则构建第二个下游任务头.
         if head_args.get('with_local_head', False):
             self.downstream_head_local = self.head_factory(
                 head_args['head_type'], head_args['output_mode'], has_conf=bool(head_args['conf_mode']), patch_size=head_args['patch_size']
@@ -120,10 +123,11 @@ class Fast3R(nn.Module,
             self.downstream_head_local = None
 
         # magic wrapper
+        # 针对图像比例不一样的情况，进行转置预测再返回.
         self.head = transpose_to_landscape(
             self.downstream_head, activate=head_args['landscape_only']
         )
-
+        
         if self.downstream_head_local:
             self.local_head = transpose_to_landscape(
                 self.downstream_head_local, activate=head_args['landscape_only']
@@ -133,6 +137,7 @@ class Fast3R(nn.Module,
 
     def head_factory(self, head_type, output_mode, has_conf=False, patch_size=16):
         """ " build a prediction head for the decoder"""
+        # 这里构建的是dpt头.
         if head_type == "dpt" and output_mode == "pts3d":
             assert self.decoder_args["depth"] > 9
             l2 = self.decoder_args["depth"]
@@ -141,6 +146,7 @@ class Fast3R(nn.Module,
             out_nchan = 3
             ed = self.encoder_args["embed_dim"]
             dd = self.decoder_args["embed_dim"]
+            # 构建像素级预测任务的DPT模块.
             return PixelwiseTaskWithDPT(
                 num_channels=out_nchan + has_conf,
                 feature_dim=feature_dim,
@@ -298,7 +304,8 @@ class Fast3R(nn.Module,
     def set_max_parallel_views_for_head(self, max_parallel_views_for_head):
         # expose this to user to control the number of views processed in parallel in the head
         self.max_parallel_views_for_head = max_parallel_views_for_head
-
+    
+    # 前向传播.
     def forward(self, views, profiling=False):
         """
         Args:
@@ -308,13 +315,16 @@ class Fast3R(nn.Module,
             list[dict]: a list of results for each view
             dict: profiling information (if profiling=True)
         """
-        # Initialize profiling dict
+        # 初始化配置信息.
         profiling_info = {} if profiling else None
         
         # encode the images --> B,S,D
+        # 对图像进行编码 --> B（批量数目）,S（图像数量）,D（特征维度）.
         encode_images_start_time = time.time()
+        # 对图像进行编码.
         encoded_feats, positions, shapes = self._encode_images(views)
         encode_images_end_time = time.time()
+        # 如果开启profiling，则记录编码时间（分析资源消耗情况）.
         if profiling:
             torch.cuda.synchronize()
             encode_images_end_time = time.time()
@@ -336,6 +346,8 @@ class Fast3R(nn.Module,
 
         # Initialize an empty list to collect image IDs for each patch.
         # Note that at inference time, different views may have different number of patches.
+        # 创建一个空列表来收集每个patch的图像ID.
+        # 注意：在推理时，不同视图可能具有不同的patch数量.
         image_ids = []
 
         # Loop through each encoded feature to get the actual number of patches
@@ -565,10 +577,12 @@ class DinoEncoder(nn.Module):
         **kwargs
     ):
         super(DinoEncoder, self).__init__()
-        # Load the pretrained DINOv2 model
+        # 自动下载预训练好的DINOv2模型，这里选择的事ViT-L-14模型.
         self.model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14')
+        # 当用DINOv2模型时，model的patch_size必须为14.
         assert self.model.patch_size == patch_size == 14, "DINOv2 model must have patch size 14"
         self.patch_size = patch_size
+        # 获取位置信息.
         self.position_getter = PositionGetter()
 
     def forward(self, image, true_shape):

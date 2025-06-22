@@ -17,20 +17,20 @@ from omegaconf import DictConfig, OmegaConf
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # ------------------------------------------------------------------------------------ #
-# the setup_root above is equivalent to:
-# - adding project root dir to PYTHONPATH
-#       (so you don't need to force user to install project as a package)
-#       (necessary before importing any local modules e.g. `from src import utils`)
-# - setting up PROJECT_ROOT environment variable
-#       (which is used as a base for paths in "configs/paths/default.yaml")
-#       (this way all filepaths are the same no matter where you run the code)
-# - loading environment variables from ".env" in root dir
+# 上面的 setup_root 相当于：
+# - 将项目根目录添加到 PYTHONPATH
+#       （这样你就不需要强制用户将项目安装为包）
+#       （在导入任何本地模块之前是必要的，例如 `from src import utils`）
+# - 设置 PROJECT_ROOT 环境变量
+#       （用作 "configs/paths/default.yaml" 中路径的基础）
+#       （这样无论你在哪里运行代码，所有文件路径都是相同的）
+# - 从根目录的 ".env" 文件加载环境变量
 #
-# you can remove it if you:
-# 1. either install project as a package or move entry files to project root dir
-# 2. set `root_dir` to "." in "configs/paths/default.yaml"
+# 如果你满足以下条件，可以删除它：
+# 1. 要么将项目安装为包，要么将入口文件移动到项目根目录
+# 2. 在 "configs/paths/default.yaml" 中将 `root_dir` 设置为 "."
 #
-# more info: https://github.com/ashleve/rootutils
+# 更多信息：https://github.com/ashleve/rootutils
 # ------------------------------------------------------------------------------------ #
 
 from fast3r.utils import (
